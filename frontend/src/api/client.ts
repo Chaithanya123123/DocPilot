@@ -1,7 +1,23 @@
-import type { DocumentItem, QuestionResponse } from './types'
+import type { ChatMessage, DocumentItem, QuestionResponse } from './types'
+
+// Empty means same origin (Vite proxy in development, FastAPI in single-command mode).
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
+
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, init)
+  } catch {
+    throw new ApiError('Cannot reach the DocPilot backend. Check that it is running.', 0)
+  }
   if (!res.ok) {
     let detail = res.statusText
     try {
@@ -10,7 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* keep statusText */
     }
-    throw new Error(detail)
+    throw new ApiError(detail, res.status)
   }
   return res.json() as Promise<T>
 }
@@ -43,7 +59,10 @@ export const api = {
       body: JSON.stringify({ question, conversation_id: conversationId ?? null }),
     }),
 
-  fileUrl: (id: string) => `/api/documents/${id}/file`,
+  conversation: (id: string) =>
+    request<{ conversation_id: string; messages: ChatMessage[] }>(`/api/conversations/${id}`),
+
+  fileUrl: (id: string) => `${API_BASE}/api/documents/${id}/file`,
 
   health: () =>
     request<{ status: string; api_key_configured: boolean; chat_model: string }>(

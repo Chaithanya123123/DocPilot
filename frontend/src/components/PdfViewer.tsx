@@ -7,7 +7,9 @@ import type { Highlight } from '../api/types'
 
 pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker()
 
-const BASE_WIDTH = 720
+const MAX_PAGE_WIDTH = 720
+const MIN_PAGE_WIDTH = 280
+const SIDE_PADDING = 32
 
 interface Props {
   documentId: string | null
@@ -24,6 +26,7 @@ interface PageMeta {
 export function PdfViewer({ documentId, pageCount, highlight }: Props) {
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map())
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [pageMeta, setPageMeta] = useState<Map<number, PageMeta>>(new Map())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -34,7 +37,8 @@ export function PdfViewer({ documentId, pageCount, highlight }: Props) {
     canvasRefs.current.clear()
     pageRefs.current.clear()
     setError('')
-    if (!documentId) return
+    // Page canvases exist only once the page count is known, so wait for processing to finish.
+    if (!documentId || !pageCount) return
 
     const renderAll = async () => {
       setLoading(true)
@@ -42,11 +46,14 @@ export function PdfViewer({ documentId, pageCount, highlight }: Props) {
       try {
         pdf = await pdfjs.getDocument(api.fileUrl(documentId)).promise
         const meta = new Map<number, PageMeta>()
+        // Fit pages to the panel so they never cover the chat on smaller screens.
+        const available = (scrollRef.current?.clientWidth ?? MAX_PAGE_WIDTH) - SIDE_PADDING
+        const pageWidth = Math.max(MIN_PAGE_WIDTH, Math.min(MAX_PAGE_WIDTH, available))
         for (let n = 1; n <= pdf.numPages; n++) {
           if (cancelled) return
           const page = await pdf.getPage(n)
           const base = page.getViewport({ scale: 1 })
-          const scale = BASE_WIDTH / base.width
+          const scale = pageWidth / base.width
           const viewport = page.getViewport({ scale })
           const canvas = canvasRefs.current.get(n)
           if (canvas) {
@@ -84,7 +91,7 @@ export function PdfViewer({ documentId, pageCount, highlight }: Props) {
     return () => {
       cancelled = true
     }
-  }, [documentId])
+  }, [documentId, pageCount])
 
   useEffect(() => {
     if (!highlight) return
@@ -108,8 +115,9 @@ export function PdfViewer({ documentId, pageCount, highlight }: Props) {
   return (
     <div className="viewer">
       {loading && <div className="viewer-banner">Rendering pages…</div>}
+      {!pageCount && <div className="viewer-banner">Pages appear when processing finishes.</div>}
       {error && <div className="error-banner viewer-banner">{error}</div>}
-      <div className="viewer-scroll">
+      <div className="viewer-scroll" ref={scrollRef}>
         {pages.map((n) => {
           const meta = pageMeta.get(n)
           const isHighlighted = highlight?.page === n

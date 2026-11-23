@@ -27,6 +27,14 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(STORAGE_DIR / "uploads")))
 INDEX_DIR = Path(os.getenv("INDEX_DIR", str(STORAGE_DIR / "indexes")))
 DB_PATH = Path(os.getenv("DB_PATH", str(STORAGE_DIR / "docpilot.db")))
 
+# Extra browser origins allowed to call the API when the frontend is hosted elsewhere.
+CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    *[o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()],
+]
+
 SAMPLE_DIR = BACKEND_DIR.parent / "samples"
 
 

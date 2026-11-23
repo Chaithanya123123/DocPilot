@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   onTranscript: (text: string) => void
@@ -18,7 +18,7 @@ type SR = {
 
 function getSR(): (new () => SR) | null {
   const w = window as unknown as Record<string, unknown>
-  return (w.SpeechRecognition ?? w.webkitSpeechRecognition) as (new () => SR) | null
+  return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SR) | null
 }
 
 export function VoiceInput({ onTranscript, disabled }: Props) {
@@ -28,6 +28,8 @@ export function VoiceInput({ onTranscript, disabled }: Props) {
   const [interim, setInterim] = useState('')
   const [error, setError] = useState('')
   const recRef = useRef<SR | null>(null)
+
+  useEffect(() => () => recRef.current?.stop(), [])
 
   const stop = () => {
     recRef.current?.stop()
@@ -67,8 +69,12 @@ export function VoiceInput({ onTranscript, disabled }: Props) {
       )
     }
     recRef.current = rec
-    rec.start()
-    setListening(true)
+    try {
+      rec.start()
+      setListening(true)
+    } catch {
+      setError('Could not start the microphone — you can type instead.')
+    }
   }
 
   if (!supported) {

@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import type { ChatMessage, Citation, DocumentItem, Highlight } from './api/types'
 import { ChatPanel } from './components/ChatPanel'
 import { DocumentSidebar } from './components/DocumentSidebar'
 import { PdfViewer } from './components/PdfViewer'
 
 const convKey = (docId: string) => `docpilot:conversation:${docId}`
-
-interface ConversationResponse {
-  conversation_id: string
-  messages: ChatMessage[]
-}
 
 export default function App() {
   const [documents, setDocuments] = useState<DocumentItem[]>([])
@@ -20,30 +15,38 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [highlight, setHighlight] = useState<Highlight | null>(null)
   const [health, setHealth] = useState<{ api_key_configured: boolean; chat_model: string } | null>(null)
+  const [offline, setOffline] = useState(false)
   const nextId = useRef(0)
+  const selectedRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedRef.current = selectedId
+  }, [selectedId])
 
   const refreshDocuments = useCallback(async () => {
     try {
       setDocuments(await api.listDocuments())
-    } catch {
-      /* backend not reachable; sidebar shows empty */
+      setOffline(false)
+    } catch (err) {
+      setOffline(err instanceof ApiError && (err.status === 0 || err.status >= 500))
     }
   }, [])
 
   useEffect(() => {
     void refreshDocuments()
-    void api.health().then(setHealth).catch(() => setHealth(null))
-    const timer = setInterval(() => {
-      setDocuments((current) => {
-        const needsPoll = current.some(
-          (d) => d.status === 'uploaded' || d.status === 'processing',
-        )
-        if (needsPoll) void refreshDocuments()
-        return current
-      })
-    }, 2000)
-    return () => clearInterval(timer)
   }, [refreshDocuments])
+
+  // Load health on start and again whenever the backend comes back.
+  useEffect(() => {
+    if (offline) return
+    void api.health().then(setHealth).catch(() => setHealth(null))
+  }, [offline])
+
+  const processing = documents.some((d) => d.status === 'uploaded' || d.status === 'processing')
+  useEffect(() => {
+    if (!processing && !offline) return
+    const timer = setInterval(() => void refreshDocuments(), offline ? 5000 : 2000)
+    return () => clearInterval(timer)
+  }, [processing, offline, refreshDocuments])
 
   const selected = documents.find((d) => d.document_id === selectedId) ?? null
 
@@ -57,14 +60,19 @@ export default function App() {
     const saved = localStorage.getItem(convKey(selectedId))
     if (!saved) return
     let stale = false
-    fetch(`/api/conversations/${saved}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: ConversationResponse | null) => {
-        if (stale || !data) return
+    api
+      .conversation(saved)
+      .then((data) => {
+        if (stale) return
         setConversationId(data.conversation_id)
         setMessages(data.messages)
       })
-      .catch(() => localStorage.removeItem(convKey(selectedId)))
+      .catch((err) => {
+        // Forget the saved conversation only if it is gone, not when the network fails.
+        if (err instanceof ApiError && err.status === 404) {
+          localStorage.removeItem(convKey(selectedId))
+        }
+      })
     return () => {
       stale = true
     }
@@ -72,13 +80,16 @@ export default function App() {
 
   const handleSend = async (question: string) => {
     if (!selectedId) return
+    const docId = selectedId
     const userId = `local-user-${nextId.current++}`
     setMessages((m) => [...m, { id: userId, role: 'user', content: question }])
     setBusy(true)
     try {
-      const res = await api.ask(selectedId, question, conversationId)
+      const res = await api.ask(docId, question, conversationId)
+      localStorage.setItem(convKey(docId), res.conversation_id)
+      // The answer belongs to the document it was asked about, not the one now open.
+      if (selectedRef.current !== docId) return
       setConversationId(res.conversation_id)
-      localStorage.setItem(convKey(selectedId), res.conversation_id)
       setMessages((m) => [
         ...m,
         {
@@ -90,6 +101,7 @@ export default function App() {
         },
       ])
     } catch (err) {
+      if (selectedRef.current !== docId) return
       setMessages((m) => [
         ...m,
         {
@@ -152,6 +164,12 @@ export default function App() {
           </div>
         )}
       </header>
+
+      {offline && (
+        <div className="error-banner" role="status">
+          Cannot reach the DocPilot backend. Retrying every few seconds…
+        </div>
+      )}
 
       <div className="workspace">
         <aside className="panel side-panel">
