@@ -1,5 +1,6 @@
 # DocPilot
 
+[![CI](https://github.com/Chaithanya123123/DocPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Chaithanya123123/DocPilot/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
@@ -12,7 +13,7 @@ questions by voice or text, and get answers linked to the exact supporting
 passages — click a citation to jump to the page and see the source region
 highlighted in the PDF viewer.
 
-> Built with [Wispr Flow](https://wispr.flow) — every requirement, follow-up,
+> Built with [Wispr Flow](https://wisprflow.ai) — every requirement, follow-up,
 > and line of this codebase was dictated, not typed.
 > `#NoHandsChallenge`
 
@@ -35,9 +36,7 @@ highlighted in the PDF viewer.
 
 ## Demo
 
-🔗 **Video demo:** _link coming soon_ (≤2 minutes)
-
-Watch for three things:
+Three things to try:
 
 1. **Ask by voice** → grounded answer with numbered citations, each card
    showing the page and the source excerpt.
@@ -108,13 +107,13 @@ abstention answer; delete removes the file, index, chunks, and conversations.
 
 ## Quick start
 
-Requires Python 3.11+, Node 18+, and a Mistral API key.
+Requires Python 3.11+, Node 20.19+ (or 22.12+), and a Mistral API key.
 
 ```bash
 # 1. Backend
 cd backend
 pip install -r requirements.txt
-copy .env.example .env      # then put your MISTRAL_API_KEY in .env
+cp .env.example .env        # Windows: copy. Then put your MISTRAL_API_KEY in .env
 python -m uvicorn app.main:app --reload --port 8000
 
 # 2. Frontend (separate terminal)
@@ -196,6 +195,7 @@ Bounding boxes are real coordinates extracted from the PDF text layer.
 | `TOP_K_EVIDENCE` | `6` | evidence blocks sent to the model |
 | `CHUNK_WORDS` / `CHUNK_OVERLAP_WORDS` | `220` / `40` | page-scoped chunking |
 | `MAX_UPLOAD_MB` | `50` | upload limit |
+| `CORS_ORIGINS` | — | extra comma-separated frontend origins, when hosted separately (set `VITE_API_URL` when building the frontend) |
 
 Note on abstention: the numeric threshold only filters clearly unrelated
 queries; cosine scores alone do not prove relevance (on a small document,
@@ -308,5 +308,5 @@ storage schema, and failure handling — is in
 
 ---
 
-Built with [Wispr Flow](https://wispr.flow) for the **No Hands Challenge**
+Built with [Wispr Flow](https://wisprflow.ai) for the **No Hands Challenge**
 `#NoHandsChallenge` · @WeMakeDevs
